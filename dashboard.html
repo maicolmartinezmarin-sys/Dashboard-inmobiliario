@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Gestión Inmobiliaria</title>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        :root {
+            --bg-dark: #0b1329;
+            --bg-card: #131e3a;
+            --bg-hover: #1c2b52;
+            --accent: #3b82f6;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #1e293b;
+            --success: #10b981;
+            
+            --color-lla95: #38bdf8;
+            --color-lla111-south: #4ade80;
+            --color-lla111-north: #c084fc;
+            --color-total: #fbbf24;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* Ajustes para evitar el desplazamiento interno (scrollbars no deseados) */
+        html, body { 
+            background-color: var(--bg-dark); 
+            color: var(--text-main); 
+            padding: 20px; 
+            width: 100%;
+            height: 100%;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+        .status-badge { background: rgba(16, 185, 129, 0.2); color: var(--success); padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
+        .status-dot { width: 8px; height: 8px; background-color: var(--success); border-radius: 50%; }
+
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; overflow-x: auto; }
+        .tab-btn { background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border); padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.3s; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .tab-btn:hover { background: var(--bg-hover); color: var(--text-main); }
+        .tab-btn.active { background: rgba(59, 130, 246, 0.2); color: #38bdf8; border: 1px solid #38bdf8; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .kpi-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .kpi-card { background: var(--bg-card); padding: 18px; border-radius: 10px; border: 1px solid var(--border); border-left: 4px solid var(--accent); }
+        .kpi-card h3 { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .kpi-card .value { font-size: 1.8rem; font-weight: bold; color: #ffffff; }
+        .kpi-card .subtitle { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 1024px) { .dashboard-grid { grid-template-columns: 1fr; } }
+
+        .card { background: var(--bg-card); border-radius: 10px; border: 1px solid var(--border); padding: 20px; margin-bottom: 20px; }
+        .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; color: var(--text-main); }
+
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        th { background-color: rgba(0,0,0,0.3); color: #38bdf8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
+        th:first-child { text-align: left; }
+        tr:hover { background-color: var(--bg-hover); }
+        
+        .row-total { background-color: rgba(0,0,0,0.2); font-weight: bold; }
+        .row-total td { border-top: 2px solid var(--border); color: #fbbf24; text-align: center; }
+        .row-total td:first-child { text-align: left; }
+
+        .input-table { 
+            background: #0b1329; 
+            border: 1px solid var(--border); 
+            color: #4ade80; 
+            padding: 6px 10px; 
+            border-radius: 6px; 
+            width: 100%; 
+            max-width: 110px; 
+            font-weight: 600; 
+            text-align: center; 
+            margin: 0 auto;
+            display: block;
+        }
+
+        .val-computed { font-weight: bold; color: #38bdf8; text-align: center; display: block; }
+        .val-total { font-weight: bold; color: #c084fc; text-align: center; display: block; }
+        .val-currency { font-weight: bold; color: #fbbf24; text-align: center; display: block; }
+
+        #table-predios th, #table-predios td,
+        #table-valoracion th, #table-valoracion td,
+        #table-area th, #table-area td,
+        #table-juridico th, #table-juridico td { 
+            text-align: center !important; 
+        }
+
+        #table-predios th:first-child, #table-predios td:first-child,
+        #table-valoracion th:first-child, #table-valoracion td:first-child,
+        #table-area th:first-child, #table-area td:first-child,
+        #table-juridico th:first-child, #table-juridico td:first-child { 
+            text-align: left !important; 
+        }
+
+        th.th-salvos { background-color: rgba(217, 119, 6, 0.2); color: #f97316; }
+        th.th-receptoras { background-color: rgba(16, 185, 129, 0.2); color: #10b981; }
+
+        .tariff-config {
+            background: var(--bg-card);
+            border: 1px solid #f59e0b;
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .tariff-input-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #0b1329;
+            border: 1px solid #f59e0b;
+            padding: 8px 15px;
+            border-radius: 8px;
+        }
+        .tariff-input-box input {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 1.2rem;
+            font-weight: bold;
+            width: 100px;
+            text-align: right;
+            outline: none;
+        }
+
+        .chart-container-donut { position: relative; height: 320px; width: 100%; display: flex; justify-content: center; align-items: center; }
+        .chart-container { position: relative; height: 320px; width: 100%; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1><i class="fa-solid fa-layer-group"></i> Dashboard de Gestión Inmobiliaria</h1>
+        <div class="status-badge">
+            <div class="status-dot"></div> Sincronizado en tiempo real
+        </div>
+    </div>
+
+    <!-- Pestañas principales -->
+    <div class="nav-tabs">
+        <button class="tab-btn active" onclick="switchTab('area', event)"><i class="fa-solid fa-chart-pie"></i> Áreas</button>
+        <button class="tab-btn" onclick="switchTab('intervencion', event)"><i class="fa-solid fa-calculator"></i> Intervención</button>
+        <button class="tab-btn" onclick="switchTab('predios', event)"><i class="fa-solid fa-house"></i> Predios</button>
+        <button class="tab-btn" onclick="switchTab('juridico', event)"><i class="fa-solid fa-scale-balanced"></i> Análisis Jurídico</button>
+        <button class="tab-btn" onclick="switchTab('valoracion', event)"><i class="fa-solid fa-sack-dollar"></i> Valoración Intervención</button>
+    </div>
+
+    <!-- TAB 1: ÁREAS -->
+    <div id="tab-area" class="tab-content active">
+        <div class="kpi-container">
+            <div class="kpi-card" style="border-left-color: var(--color-lla95);">
+                <h3>LLA 95 3D</h3>
+                <div class="value" id="kpi-lla95-val">194.8 km²</div>
+                <div class="subtitle" id="kpi-lla95-pct">39.2% del total</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: var(--color-lla111-south);">
+                <h3>LLA111 3D SOUTH</h3>
+                <div class="value" id="kpi-lla111-south-val">96.9 km²</div>
+                <div class="subtitle" id="kpi-lla111-south-pct">19.5% del total</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: var(--color-lla111-north);">
+                <h3>LLA111 NORTH 3D</h3>
+                <div class="value" id="kpi-lla111-north-val">205.3 km²</div>
+                <div class="subtitle" id="kpi-lla111-north-pct">41.3% del total</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: var(--color-total);">
+                <h3>ÁREA TOTAL</h3>
+                <div class="value" id="kpi-area-total-val">497.0 km²</div>
+                <div class="subtitle">100% Cobertura de Proyecto</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><i class="fa-solid fa-chart-pie"></i> Distribución Porcentual del Área por Proyecto</div>
+            <div class="chart-container-donut"><canvas id="chartAreaDona"></canvas></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><i class="fa-solid fa-pen-to-square"></i> Cuadro General de Áreas por Proyecto (Editable)</div>
+            <div class="table-responsive">
+                <table id="table-area">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">PROYECTO</th>
+                            <th style="text-align: center;">ÁREA (KM²)</th>
+                            <th style="text-align: center;">PARTICIPACIÓN (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="row-total">
+                            <td style="text-align: left;">TOTAL</td>
+                            <td style="text-align: center;" id="foot-total-area">497.0</td>
+                            <td style="text-align: center;"><span style="color: #fbbf24;">100%</span></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: INTERVENCIÓN -->
+    <div id="tab-intervencion" class="tab-content">
+        <div class="dashboard-grid">
+            <div>
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-calculator"></i> Matriz de Intervención por Bloque (Cantidades)</div>
+                    <div class="table-responsive">
+                        <table id="table-intervencion">
+                            <thead>
+                                <tr>
+                                    <th>Bloque</th>
+                                    <th>Total Predios</th>
+                                    <th>Delimitado</th>
+                                    <th>Por Delimitar</th>
+                                    <th>Permisado</th>
+                                    <th>Sin Intervención</th>
+                                    <th>Por Permisar</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-percent"></i> Porcentajes de Intervención por Bloque (%)</div>
+                    <div class="table-responsive">
+                        <table id="table-intervencion-pct">
+                            <thead>
+                                <tr>
+                                    <th>Bloque</th>
+                                    <th style="text-align: center;">% Delimitado</th>
+                                    <th style="text-align: center;">% Por Delimitar</th>
+                                    <th style="text-align: center;">% Permisado</th>
+                                    <th style="text-align: center;">% Por Permisar</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="chart-container"><canvas id="chartIntervencionBarra"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: PREDIOS -->
+    <div id="tab-predios" class="tab-content">
+        <div class="kpi-container">
+            <div class="kpi-card" style="border-left-color: #38bdf8;">
+                <h3>PREDIOS IDENTIFICADOS</h3>
+                <div class="value" id="kpi-predios-identificados">96</div>
+                <div class="subtitle" id="kpi-predios-ident-sub">52 Con FMI | 44 Sin FMI</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #4ade80;">
+                <h3>DERIVADAS FMI IDENTIFICADOS</h3>
+                <div class="value" id="kpi-derivadas-fmi">29</div>
+                <div class="subtitle">Subdivisiones registrales</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #c084fc;">
+                <h3>TOTAL PREDIOS CON FMI</h3>
+                <div class="value" id="kpi-total-con-fmi">81</div>
+                <div class="subtitle">Directos + Derivados</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #f59e0b;">
+                <h3>NUEVOS OCUPANTES / POSEEDORES</h3>
+                <div class="value" id="kpi-nuevos-ocup-pos">12</div>
+                <div class="subtitle" id="kpi-ocup-pos-sub">11 Ocupantes | 1 Poseedor</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #38bdf8;">
+                <h3>GRAN TOTAL PREDIOS</h3>
+                <div class="value" id="kpi-gran-total-predios">137</div>
+                <div class="subtitle">Cobertura global del proyecto</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><i class="fa-solid fa-pen-to-square"></i> Matriz de Caracterización de Predios (Editable)</div>
+            <div class="table-responsive">
+                <table id="table-predios">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">PROYECTO</th>
+                            <th style="text-align: center;">PREDIOS IDENTIFICADOS</th>
+                            <th style="text-align: center;">CON FMI</th>
+                            <th style="text-align: center;">SIN FMI</th>
+                            <th style="text-align: center;">DERIVADAS FMI IDENTIFICADOS</th>
+                            <th style="text-align: center;">TOTAL PREDIOS CON FMI</th>
+                            <th style="text-align: center;">PREDIOS NUEVOS OCUPANTES</th>
+                            <th style="text-align: center;">PREDIOS NUEVOS POSEEDOR</th>
+                            <th style="text-align: center;">TOTAL PREDIOS</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="row-total">
+                            <td style="text-align: left;">TOTAL</td>
+                            <td style="text-align: center;" id="foot-pred-ident">0</td>
+                            <td style="text-align: center;" id="foot-con-fmi">0</td>
+                            <td style="text-align: center;" id="foot-sin-fmi">0</td>
+                            <td style="text-align: center;" id="foot-derivadas">0</td>
+                            <td style="text-align: center;" id="foot-total-con-fmi">0</td>
+                            <td style="text-align: center;" id="foot-ocupantes">0</td>
+                            <td style="text-align: center;" id="foot-poseedores">0</td>
+                            <td style="text-align: center;" id="foot-gran-total">0</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-chart-column"></i> Clasificación de Predios Identificados por Proyecto</div>
+                <div class="chart-container"><canvas id="chartPrediosBarra"></canvas></div>
+            </div>
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-chart-pie"></i> Composición Total de Predios y Ocupación</div>
+                <div class="chart-container-donut"><canvas id="chartPrediosDona"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: ANÁLISIS JURÍDICO -->
+    <div id="tab-juridico" class="tab-content">
+        <!-- 1. KPIs Generales Arriba -->
+        <div class="kpi-container">
+            <div class="kpi-card" style="border-left-color: #38bdf8;">
+                <h3>ESTUDIOS PREJURÍDICOS REALIZADOS</h3>
+                <div class="value" id="kpi-juridico-estudios">81</div>
+                <div class="subtitle">100% de Cumplimiento en avance</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #4ade80;">
+                <h3>ÁREA FMI (KM²)</h3>
+                <div class="value" id="kpi-juridico-fmi">292.83 km²</div>
+                <div class="subtitle">Cobertura legal formalizada</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #f59e0b;">
+                <h3>ÁREA SIN FMI (KM²)</h3>
+                <div class="value" id="kpi-juridico-sin-fmi">204.22 km²</div>
+                <div class="subtitle">Área en proceso / informal</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #c084fc;">
+                <h3>% PROMEDIO COBERTURA FMI</h3>
+                <div class="value" id="kpi-juridico-pct">58.9%</div>
+                <div class="subtitle">Sobre área total de bloques</div>
+            </div>
+        </div>
+
+        <!-- 2. Tabla Central (Editable y Calculada) -->
+        <div class="card">
+            <div class="card-title"><i class="fa-solid fa-pen-to-square"></i> Matriz de Análisis Jurídico de Áreas por Proyecto (Editable)</div>
+            <div class="table-responsive">
+                <table id="table-juridico">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">PROYECTO</th>
+                            <th style="text-align: center;">ÁREA BLOQUE (KM²)</th>
+                            <th style="text-align: center;">ÁREA FMI (KM²)</th>
+                            <th style="text-align: center;">ÁREA SIN FMI (KM²)</th>
+                            <th style="text-align: center;">% COBERTURA FMI</th>
+                            <th style="text-align: center;">ESTUDIOS JURÍDICOS</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="row-total">
+                            <td style="text-align: left;">TOTAL</td>
+                            <td id="foot-jur-bloque">0.0</td>
+                            <td id="foot-jur-fmi">0.0</td>
+                            <td id="foot-jur-sin-fmi">0.0</td>
+                            <td id="foot-jur-pct">0%</td>
+                            <td id="foot-jur-estudios">0</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- 3. Gráficas Abajo -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-chart-column"></i> Distribución de Área por Bloque: FMI vs Sin FMI (km²)</div>
+                <div class="chart-container"><canvas id="chartJuridicoBarra"></canvas></div>
+            </div>
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-chart-pie"></i> % Porcentaje de Cobertura FMI sobre el Bloque</div>
+                <div class="chart-container-donut"><canvas id="chartJuridicoDona"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 5: VALORACIÓN INTERVENCIÓN -->
+    <div id="tab-valoracion" class="tab-content">
+        <!-- Banner Configuración Tarifa -->
+        <div class="tariff-config">
+            <div>
+                <h3 style="color: #fbbf24; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-coins"></i> Configuración de Tarifa de Intervención
+                </h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">
+                    Cambia este valor para simular nuevos costos globales de intervención por metro cuadrado.
+                </p>
+            </div>
+            <div class="tariff-input-box">
+                <span style="color: #fbbf24; font-weight: bold;">Tarifa / m²: $</span>
+                <input type="number" id="input-tarifa" value="900" oninput="updateTarifaGlobal(this.value)">
+            </div>
+        </div>
+
+        <!-- KPIs Valoración -->
+        <div class="kpi-container">
+            <div class="kpi-card" style="border-left-color: #f97316;">
+                <h3>ÁREA SALVOS TOTAL</h3>
+                <div class="value" id="kpi-salvos-km2">6.66 km²</div>
+                <div class="subtitle" id="kpi-salvos-m2">6.659.492,96 m²</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #10b981;">
+                <h3>ÁREA RECEPTORAS TOTAL</h3>
+                <div class="value" id="kpi-receptoras-km2">3.64 km²</div>
+                <div class="subtitle" id="kpi-receptoras-m2">3.636.500,63 m²</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #38bdf8;">
+                <h3>VALOR INTERVENCIÓN SALVOS</h3>
+                <div class="value" id="kpi-valor-salvos">$ 5993.5 M</div>
+                <div class="subtitle" id="sub-tarifa-salvos">Tarifa $900/m²</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #c084fc;">
+                <h3>VALOR INTERVENCIÓN RECEPTORAS</h3>
+                <div class="value" id="kpi-valor-receptoras">$ 3272.9 M</div>
+                <div class="subtitle" id="sub-tarifa-receptoras">Tarifa $900/m²</div>
+            </div>
+            <div class="kpi-card" style="border-left-color: #fbbf24;">
+                <h3>TOTAL INTERVENCIÓN GLOBAL</h3>
+                <div class="value" id="kpi-total-intervencion">$ 9266.4 M</div>
+                <div class="subtitle">Presupuesto total estimado</div>
+            </div>
+        </div>
+
+        <!-- Tabla Matriz de Intervención y Valoración -->
+        <div class="card">
+            <div class="card-title"><i class="fa-solid fa-pen-to-square"></i> Matriz de Intervención y Valoración (Editable)</div>
+            <div class="table-responsive">
+                <table id="table-valoracion">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">PROYECTO</th>
+                            <th class="th-salvos">SALVOS Area m²</th>
+                            <th class="th-salvos" id="th-valor-salvos">VALOR $900</th>
+                            <th class="th-receptoras">RECEPTORAS Area m²</th>
+                            <th class="th-receptoras" id="th-valor-receptoras">VALOR $900</th>
+                            <th style="background-color: rgba(59, 130, 246, 0.2); color: #38bdf8;">TOTAL INTERVENCIÓN</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="row-total">
+                            <td style="text-align: left;">TOTAL</td>
+                            <td id="foot-salvos-m2">0.00</td>
+                            <td id="foot-salvos-val">$ 0,00</td>
+                            <td id="foot-receptoras-m2">0.00</td>
+                            <td id="foot-receptoras-val">$ 0,00</td>
+                            <td id="foot-grand-total-val" style="color: #fbbf24;">$ 0,00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://eqzcjwnqbyznqdqvlpme.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_kQF1GxM-V_xt1vNGXMCLnw_KluAXT13';
+        let dbClient = null;
+
+        let tarifaGlobal = 900;
+
+        let areaData = [
+            { id: 1, bloque: 'LLA 95 3D', area: 194.8 },
+            { id: 2, bloque: 'LLA111 3D South', area: 96.9 },
+            { id: 3, bloque: 'LLA111 North 3D', area: 205.3 }
+        ];
+
+        let intervencionData = [
+            { id: 1, bloque: 'LLA 95 3D', total_predios: 48, delimitado: 20, permisado: 30, sin_intervencion: 2 },
+            { id: 2, bloque: 'LLA111 3D South', total_predios: 0, delimitado: 0, permisado: 0, sin_intervencion: 0 },
+            { id: 3, bloque: 'LLA111 North 3D', total_predios: 0, delimitado: 0, permisado: 0, sin_intervencion: 0 }
+        ];
+
+        let prediosData = [
+            { id: 1, bloque: 'LLA 95 3D', con_fmi: 27, sin_fmi: 21, derivadas_fmi: 15, nuevos_ocupantes: 0, nuevos_poseedor: 0 },
+            { id: 2, bloque: 'LLA111 3D South', con_fmi: 10, sin_fmi: 11, derivadas_fmi: 13, nuevos_ocupantes: 3, nuevos_poseedor: 1 },
+            { id: 3, bloque: 'LLA111 North 3D', con_fmi: 15, sin_fmi: 12, derivadas_fmi: 1, nuevos_ocupantes: 8, nuevos_poseedor: 0 }
+        ];
+
+        let juridicoData = [
+            { id: 1, bloque: 'LLA 95 3D', area_bloque: 194.8, area_fmi: 130.0, estudios: 27 },
+            { id: 2, bloque: 'LLA111 3D South', area_bloque: 96.9, area_fmi: 58.0, estudios: 10 },
+            { id: 3, bloque: 'LLA111 North 3D', area_bloque: 205.3, area_fmi: 104.83, estudios: 44 }
+        ];
+
+        let valoracionData = [
+            { id: 1, bloque: 'LLA 95 3D', salvos_m2: 2631153.92, receptoras_m2: 1251249.82 },
+            { id: 2, bloque: 'LLA111 3D South', salvos_m2: 1204490.73, receptoras_m2: 768473.37 },
+            { id: 3, bloque: 'LLA111 North 3D', salvos_m2: 2823848.31, receptoras_m2: 1616777.44 }
+        ];
+
+        let chartAreaDona, chartIntervencionBarra, chartPrediosBarra, chartPrediosDona, chartJuridicoBarra, chartJuridicoDona;
+
+        function formatCOP(num) {
+            return '$ ' + num.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatM2(num) {
+            return num.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        async function cargarDatosNube() {
+            if (!dbClient) return;
+
+            try {
+                const { data: area } = await dbClient.from('proyectos_area').select('*').order('id');
+                const { data: intervencion } = await dbClient.from('proyectos_intervencion').select('*').order('id');
+                const { data: predios } = await dbClient.from('proyectos_predios').select('*').order('id');
+                const { data: juridico } = await dbClient.from('proyectos_juridico').select('*').order('id');
+                const { data: valoracion } = await dbClient.from('proyectos_valoracion').select('*').order('id');
+
+                if (area && area.length >= 3) areaData = area;
+                if (intervencion && intervencion.length >= 3) intervencionData = intervencion;
+                if (predios && predios.length >= 3) prediosData = predios;
+                if (juridico && juridico.length >= 3) juridicoData = juridico;
+                if (valoracion && valoracion.length >= 3) valoracionData = valoracion;
+
+            } catch (err) {
+                console.error("Error sincronizando con Supabase:", err);
+            }
+
+            renderAllTables();
+        }
+
+        function updateAreaCalculations() {
+            const totalArea = areaData.reduce((acc, curr) => {
+                let val = typeof curr.area === 'string' ? parseFloat(curr.area.replace(',', '.')) : parseFloat(curr.area);
+                return acc + (isNaN(val) ? 0 : val);
+            }, 0);
+
+            areaData.forEach(row => {
+                let val = typeof row.area === 'string' ? parseFloat(row.area.replace(',', '.')) : parseFloat(row.area);
+                val = isNaN(val) ? 0 : val;
+                
+                const pct = totalArea > 0 ? ((val / totalArea) * 100).toFixed(1) : '0.0';
+                
+                const badge = document.getElementById(`pct-badge-${row.id}`);
+                if (badge) {
+                    badge.innerText = `${pct}%`;
+                }
+            });
+
+            const lla95 = areaData.find(d => d.bloque.includes('95')) || { area: 0 };
+            const lla111S = areaData.find(d => d.bloque.toLowerCase().includes('south')) || { area: 0 };
+            const lla111N = areaData.find(d => d.bloque.toLowerCase().includes('north')) || { area: 0 };
+
+            const val95 = parseFloat(String(lla95.area).replace(',', '.')) || 0;
+            const valS = parseFloat(String(lla111S.area).replace(',', '.')) || 0;
+            const valN = parseFloat(String(lla111N.area).replace(',', '.')) || 0;
+
+            document.getElementById('kpi-lla95-val').innerText = `${val95.toFixed(1)} km²`;
+            document.getElementById('kpi-lla95-pct').innerText = totalArea > 0 ? `${((val95 / totalArea) * 100).toFixed(1)}% del total` : '0%';
+
+            document.getElementById('kpi-lla111-south-val').innerText = `${valS.toFixed(1)} km²`;
+            document.getElementById('kpi-lla111-south-pct').innerText = totalArea > 0 ? `${((valS / totalArea) * 100).toFixed(1)}% del total` : '0%';
+
+            document.getElementById('kpi-lla111-north-val').innerText = `${valN.toFixed(1)} km²`;
+            document.getElementById('kpi-lla111-north-pct').innerText = totalArea > 0 ? `${((valN / totalArea) * 100).toFixed(1)}% del total` : '0%';
+
+            document.getElementById('kpi-area-total-val').innerText = `${totalArea.toFixed(1)} km²`;
+            document.getElementById('foot-total-area').innerText = totalArea.toFixed(1).replace('.', ',');
+
+            updateChartDona();
+        }
+
+        function updatePrediosCalculations() {
+            let sumConFmi = 0, sumSinFmi = 0, sumDerivadas = 0, sumOcupantes = 0, sumPoseedores = 0;
+
+            prediosData.forEach(row => {
+                sumConFmi += parseFloat(row.con_fmi) || 0;
+                sumSinFmi += parseFloat(row.sin_fmi) || 0;
+                sumDerivadas += parseFloat(row.derivadas_fmi) || 0;
+                sumOcupantes += parseFloat(row.nuevos_ocupantes) || 0;
+                sumPoseedores += parseFloat(row.nuevos_poseedor) || 0;
+            });
+
+            const sumIdentificados = sumConFmi + sumSinFmi;
+            const sumTotalConFmi = sumConFmi + sumDerivadas;
+            const sumNuevosOcupPos = sumOcupantes + sumPoseedores;
+            const sumGranTotal = sumTotalConFmi + sumSinFmi + sumNuevosOcupPos;
+
+            document.getElementById('kpi-predios-identificados').innerText = sumIdentificados;
+            document.getElementById('kpi-predios-ident-sub').innerText = `${sumConFmi} Con FMI | ${sumSinFmi} Sin FMI`;
+            document.getElementById('kpi-derivadas-fmi').innerText = sumDerivadas;
+            document.getElementById('kpi-total-con-fmi').innerText = sumTotalConFmi;
+            document.getElementById('kpi-nuevos-ocup-pos').innerText = sumNuevosOcupPos;
+            document.getElementById('kpi-ocup-pos-sub').innerText = `${sumOcupantes} Ocupantes | ${sumPoseedores} Poseedor`;
+            document.getElementById('kpi-gran-total-predios').innerText = sumGranTotal;
+
+            document.getElementById('foot-pred-ident').innerText = sumIdentificados;
+            document.getElementById('foot-con-fmi').innerText = sumConFmi;
+            document.getElementById('foot-sin-fmi').innerText = sumSinFmi;
+            document.getElementById('foot-derivadas').innerText = sumDerivadas;
+            document.getElementById('foot-total-con-fmi').innerText = sumTotalConFmi;
+            document.getElementById('foot-ocupantes').innerText = sumOcupantes;
+            document.getElementById('foot-poseedores').innerText = sumPoseedores;
+            document.getElementById('foot-gran-total').innerText = sumGranTotal;
+
+            updatePrediosCharts();
+        }
+
+        function updateJuridicoCalculations() {
+            let sumBloque = 0;
+            let sumFmi = 0;
+            let sumSinFmi = 0;
+            let sumEstudios = 0;
+
+            juridicoData.forEach(row => {
+                const bloque = parseFloat(row.area_bloque) || 0;
+                const fmi = parseFloat(row.area_fmi) || 0;
+                const estudios = parseFloat(row.estudios) || 0;
+                const sinFmi = Math.max(0, bloque - fmi);
+
+                sumBloque += bloque;
+                sumFmi += fmi;
+                sumSinFmi += sinFmi;
+                sumEstudios += estudios;
+            });
+
+            const pctPromedio = sumBloque > 0 ? ((sumFmi / sumBloque) * 100).toFixed(1) : '0.0';
+
+            document.getElementById('kpi-juridico-estudios').innerText = sumEstudios;
+            document.getElementById('kpi-juridico-fmi').innerText = `${sumFmi.toFixed(2)} km²`;
+            document.getElementById('kpi-juridico-sin-fmi').innerText = `${sumSinFmi.toFixed(2)} km²`;
+            document.getElementById('kpi-juridico-pct').innerText = `${pctPromedio}%`;
+
+            document.getElementById('foot-jur-bloque').innerText = sumBloque.toFixed(2);
+            document.getElementById('foot-jur-fmi').innerText = sumFmi.toFixed(2);
+            document.getElementById('foot-jur-sin-fmi').innerText = sumSinFmi.toFixed(2);
+            document.getElementById('foot-jur-pct').innerText = `${pctPromedio}%`;
+            document.getElementById('foot-jur-estudios').innerText = sumEstudios;
+
+            updateJuridicoCharts();
+        }
+
+        function updateValoracionCalculations() {
+            let sumSalvosM2 = 0;
+            let sumReceptorasM2 = 0;
+
+            valoracionData.forEach(row => {
+                sumSalvosM2 += parseFloat(row.salvos_m2) || 0;
+                sumReceptorasM2 += parseFloat(row.receptoras_m2) || 0;
+            });
+
+            const salvosKm2 = (sumSalvosM2 / 1000000).toFixed(2);
+            const receptorasKm2 = (sumReceptorasM2 / 1000000).toFixed(2);
+
+            const totalValSalvos = sumSalvosM2 * tarifaGlobal;
+            const totalValReceptoras = sumReceptorasM2 * tarifaGlobal;
+            const grandTotalVal = totalValSalvos + totalValReceptoras;
+
+            document.getElementById('kpi-salvos-km2').innerText = `${salvosKm2} km²`;
+            document.getElementById('kpi-salvos-m2').innerText = `${formatM2(sumSalvosM2)} m²`;
+
+            document.getElementById('kpi-receptoras-km2').innerText = `${receptorasKm2} km²`;
+            document.getElementById('kpi-receptoras-m2').innerText = `${formatM2(sumReceptorasM2)} m²`;
+
+            document.getElementById('kpi-valor-salvos').innerText = `$ ${(totalValSalvos / 1000000).toFixed(1)} M`;
+            document.getElementById('sub-tarifa-salvos').innerText = `Tarifa $${tarifaGlobal}/m²`;
+
+            document.getElementById('kpi-valor-receptoras').innerText = `$ ${(totalValReceptoras / 1000000).toFixed(1)} M`;
+            document.getElementById('sub-tarifa-receptoras').innerText = `Tarifa $${tarifaGlobal}/m²`;
+
+            document.getElementById('kpi-total-intervencion').innerText = `$ ${(grandTotalVal / 1000000).toFixed(1)} M`;
+
+            document.getElementById('th-valor-salvos').innerText = `VALOR $${tarifaGlobal}`;
+            document.getElementById('th-valor-receptoras').innerText = `VALOR $${tarifaGlobal}`;
+
+            document.getElementById('foot-salvos-m2').innerText = formatM2(sumSalvosM2);
+            document.getElementById('foot-salvos-val').innerText = formatCOP(totalValSalvos);
+            document.getElementById('foot-receptoras-m2').innerText = formatM2(sumReceptorasM2);
+            document.getElementById('foot-receptoras-val').innerText = formatCOP(totalValReceptoras);
+            document.getElementById('foot-grand-total-val').innerText = formatCOP(grandTotalVal);
+        }
+
+        function updateTarifaGlobal(val) {
+            tarifaGlobal = parseFloat(val) || 0;
+            renderValoracionTable();
+        }
+
+        async function updateValoracionField(id, field, val) {
+            const parsedVal = parseFloat(val) || 0;
+            const item = valoracionData.find(d => d.id === id);
+            if (item) item[field] = parsedVal;
+
+            renderValoracionTable();
+
+            if (dbClient) await dbClient.from('proyectos_valoracion').update({ [field]: parsedVal }).eq('id', id);
+        }
+
+        async function updateArea(id, areaVal) {
+            const val = parseFloat(areaVal) || 0;
+            const item = areaData.find(d => d.id === id);
+            if (item) item.area = val;
+            updateAreaCalculations();
+            if (dbClient) await dbClient.from('proyectos_area').update({ area: val }).eq('id', id);
+        }
+
+        async function updateIntervencion(id, field, val) {
+            const parsedVal = parseFloat(val) || 0;
+            const item = intervencionData.find(d => d.id === id);
+            if (item) item[field] = parsedVal;
+            
+            renderIntervencionTable();
+            renderIntervencionPctTable();
+            updateAllCharts();
+            
+            if (dbClient) await dbClient.from('proyectos_intervencion').update({ [field]: parsedVal }).eq('id', id);
+        }
+
+        async function updatePredioField(id, field, val) {
+            const parsedVal = parseFloat(val) || 0;
+            const item = prediosData.find(d => d.id === id);
+            if (item) item[field] = parsedVal;
+            
+            renderPrediosTable();
+            updatePrediosCalculations();
+
+            if (dbClient) await dbClient.from('proyectos_predios').update({ [field]: parsedVal }).eq('id', id);
+        }
+
+        async function updateJuridicoField(id, field, val) {
+            const parsedVal = parseFloat(val) || 0;
+            const item = juridicoData.find(d => d.id === id);
+            if (item) item[field] = parsedVal;
+
+            renderJuridicoTable();
+            updateJuridicoCalculations();
+
+            if (dbClient) await dbClient.from('proyectos_juridico').update({ [field]: parsedVal }).eq('id', id);
+        }
+
+        function renderAreaTable() {
+            const tbody = document.querySelector('#table-area tbody');
+            tbody.innerHTML = areaData.map((row) => `
+                <tr>
+                    <td style="font-weight: 600; text-align: left;">${row.bloque}</td>
+                    <td style="text-align: center;">
+                        <input type="number" step="0.1" class="input-table" value="${row.area || 0}" oninput="updateArea(${row.id}, this.value)">
+                    </td>
+                    <td style="text-align: center;">
+                        <span id="pct-badge-${row.id}">0%</span>
+                    </td>
+                </tr>
+            `).join('');
+            updateAreaCalculations();
+        }
+
+        function renderIntervencionTable() {
+            const tbody = document.querySelector('#table-intervencion tbody');
+            tbody.innerHTML = intervencionData.map((row) => {
+                const total = parseFloat(row.total_predios) || 0;
+                const delimitado = parseFloat(row.delimitado) || 0;
+                const permisado = parseFloat(row.permisado) || 0;
+                const sinIntervencion = parseFloat(row.sin_intervencion) || 0;
+                
+                const porDelimitar = total - delimitado;
+                const porPermisar = total - (permisado + sinIntervencion);
+
+                return `
+                    <tr>
+                        <td style="font-weight: 600;">${row.bloque}</td>
+                        <td><input type="number" class="input-table" value="${total}" oninput="updateIntervencion(${row.id}, 'total_predios', this.value)"></td>
+                        <td><input type="number" class="input-table" value="${delimitado}" oninput="updateIntervencion(${row.id}, 'delimitado', this.value)"></td>
+                        <td style="font-weight: bold; color: #38bdf8; text-align: center;">${porDelimitar}</td>
+                        <td><input type="number" class="input-table" value="${permisado}" oninput="updateIntervencion(${row.id}, 'permisado', this.value)"></td>
+                        <td><input type="number" class="input-table" value="${sinIntervencion}" oninput="updateIntervencion(${row.id}, 'sin_intervencion', this.value)"></td>
+                        <td style="font-weight: bold; color: #fbbf24; text-align: center;">${porPermisar}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderIntervencionPctTable() {
+            const tbody = document.querySelector('#table-intervencion-pct tbody');
+            tbody.innerHTML = intervencionData.map((row) => {
+                const total = parseFloat(row.total_predios) || 0;
+                const delimitado = parseFloat(row.delimitado) || 0;
+                const permisado = parseFloat(row.permisado) || 0;
+                const sinIntervencion = parseFloat(row.sin_intervencion) || 0;
+                
+                const porDelimitar = total - delimitado;
+                const porPermisar = total - (permisado + sinIntervencion);
+
+                const pctDelimitado = total > 0 ? ((delimitado / total) * 100).toFixed(1) : '0.0';
+                const pctPorDelimitar = total > 0 ? ((porDelimitar / total) * 100).toFixed(1) : '0.0';
+                const pctPermisado = total > 0 ? ((permisado / total) * 100).toFixed(1) : '0.0';
+                const pctPorPermisar = total > 0 ? ((porPermisar / total) * 100).toFixed(1) : '0.0';
+
+                return `
+                    <tr>
+                        <td style="font-weight: 600;">${row.bloque}</td>
+                        <td style="text-align: center;"><span style="color: #38bdf8;">${pctDelimitado}%</span></td>
+                        <td style="text-align: center;"><span style="color: #0284c7;">${pctPorDelimitar}%</span></td>
+                        <td style="text-align: center;"><span style="color: #10b981;">${pctPermisado}%</span></td>
+                        <td style="text-align: center;"><span style="color: #fbbf24;">${pctPorPermisar}%</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderPrediosTable() {
+            const tbody = document.querySelector('#table-predios tbody');
+            tbody.innerHTML = prediosData.map((row) => {
+                const conFmi = parseFloat(row.con_fmi) || 0;
+                const sinFmi = parseFloat(row.sin_fmi) || 0;
+                const derivadas = parseFloat(row.derivadas_fmi) || 0;
+                const ocupantes = parseFloat(row.nuevos_ocupantes) || 0;
+                const poseedores = parseFloat(row.nuevos_poseedor) || 0;
+
+                const prediosIdentificados = conFmi + sinFmi;
+                const totalConFmi = conFmi + derivadas;
+                const totalPredios = totalConFmi + sinFmi + ocupantes + poseedores;
+
+                return `
+                    <tr>
+                        <td style="font-weight: 600; text-align: left;">${row.bloque}</td>
+                        <td style="text-align: center;"><span class="val-total">${prediosIdentificados}</span></td>
+                        <td style="text-align: center;"><input type="number" class="input-table" value="${conFmi}" oninput="updatePredioField(${row.id}, 'con_fmi', this.value)"></td>
+                        <td style="text-align: center;"><input type="number" class="input-table" value="${sinFmi}" oninput="updatePredioField(${row.id}, 'sin_fmi', this.value)"></td>
+                        <td style="text-align: center;"><input type="number" class="input-table" value="${derivadas}" oninput="updatePredioField(${row.id}, 'derivadas_fmi', this.value)"></td>
+                        <td style="text-align: center;"><span class="val-computed">${totalConFmi}</span></td>
+                        <td style="text-align: center;"><input type="number" class="input-table" value="${ocupantes}" oninput="updatePredioField(${row.id}, 'nuevos_ocupantes', this.value)"></td>
+                        <td style="text-align: center;"><input type="number" class="input-table" value="${poseedores}" oninput="updatePredioField(${row.id}, 'nuevos_poseedor', this.value)"></td>
+                        <td style="text-align: center;"><span class="val-total" style="color: #4ade80;">${totalPredios}</span></td>
+                    </tr>
+                `;
+            }).join('');
+
+            updatePrediosCalculations();
+        }
+
+        function renderJuridicoTable() {
+            const tbody = document.querySelector('#table-juridico tbody');
+            tbody.innerHTML = juridicoData.map((row) => {
+                const bloque = parseFloat(row.area_bloque) || 0;
+                const fmi = parseFloat(row.area_fmi) || 0;
+                const sinFmi = Math.max(0, bloque - fmi);
+                const pct = bloque > 0 ? ((fmi / bloque) * 100).toFixed(1) : '0.0';
+                const estudios = parseFloat(row.estudios) || 0;
+
+                return `
+                    <tr>
+                        <td style="font-weight: 600; text-align: left;">${row.bloque}</td>
+                        <td style="text-align: center;"><input type="number" step="0.1" class="input-table" value="${bloque}" oninput="updateJuridicoField(${row.id}, 'area_bloque', this.value)"></td>
+                        <td style="text-align: center;"><input type="number" step="0.1" class="input-table" value="${fmi}" oninput="updateJuridicoField(${row.id}, 'area_fmi', this.value)"></td>
+                        <td style="text-align: center;"><span class="val-computed" style="color: #f59e0b;">${sinFmi.toFixed(2)}</span></td>
+                        <td style="text-align: center;"><span class="val-computed" style="color: #c084fc;">${pct}%</span></td>
+                        <td style="text-align: center;"><input type="number" class="input-table" value="${estudios}" oninput="updateJuridicoField(${row.id}, 'estudios', this.value)"></td>
+                    </tr>
+                `;
+            }).join('');
+
+            updateJuridicoCalculations();
+        }
+
+        function renderValoracionTable() {
+            const tbody = document.querySelector('#table-valoracion tbody');
+            tbody.innerHTML = valoracionData.map((row) => {
+                const salvosM2 = parseFloat(row.salvos_m2) || 0;
+                const receptorasM2 = parseFloat(row.receptoras_m2) || 0;
+
+                const valSalvos = salvosM2 * tarifaGlobal;
+                const valReceptoras = receptorasM2 * tarifaGlobal;
+                const totalIntervencion = valSalvos + valReceptoras;
+
+                return `
+                    <tr>
+                        <td style="font-weight: 600; text-align: left;">${row.bloque}</td>
+                        <td style="text-align: center;"><input type="number" step="0.01" class="input-table" style="max-width:130px;" value="${salvosM2}" oninput="updateValoracionField(${row.id}, 'salvos_m2', this.value)"></td>
+                        <td style="text-align: center;"><span class="val-currency">${formatCOP(valSalvos)}</span></td>
+                        <td style="text-align: center;"><input type="number" step="0.01" class="input-table" style="max-width:130px;" value="${receptorasM2}" oninput="updateValoracionField(${row.id}, 'receptoras_m2', this.value)"></td>
+                        <td style="text-align: center;"><span class="val-currency" style="color: #10b981;">${formatCOP(valReceptoras)}</span></td>
+                        <td style="text-align: center;"><span class="val-currency" style="color: #fbbf24;">${formatCOP(totalIntervencion)}</span></td>
+                    </tr>
+                `;
+            }).join('');
+
+            updateValoracionCalculations();
+        }
+
+        function renderAllTables() {
+            renderAreaTable();
+            renderIntervencionTable();
+            renderIntervencionPctTable();
+            renderPrediosTable();
+            renderJuridicoTable();
+            renderValoracionTable();
+            updateAllCharts();
+        }
+
+        function switchTab(tabId, event) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            }
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+        }
+
+        function initCharts() {
+            const ctxArea = document.getElementById('chartAreaDona').getContext('2d');
+            chartAreaDona = new Chart(ctxArea, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#38bdf8', '#4ade80', '#c084fc'], borderColor: '#131e3a', borderWidth: 3, cutout: '65%' }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const ctxIntervencion = document.getElementById('chartIntervencionBarra').getContext('2d');
+            chartIntervencionBarra = new Chart(ctxIntervencion, {
+                type: 'bar',
+                data: { 
+                    labels: [], 
+                    datasets: [
+                        { label: 'Total Predios', data: [], backgroundColor: '#fbbf24' },
+                        { label: 'Delimitado', data: [], backgroundColor: '#38bdf8' },
+                        { label: 'Por Delimitar', data: [], backgroundColor: '#0284c7' },
+                        { label: 'Permisado', data: [], backgroundColor: '#10b981' },
+                        { label: 'Sin Intervención', data: [], backgroundColor: '#64748b' },
+                        { label: 'Por Permisar', data: [], backgroundColor: '#ef4444' }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const ctxPrediosBarra = document.getElementById('chartPrediosBarra').getContext('2d');
+            chartPrediosBarra = new Chart(ctxPrediosBarra, {
+                type: 'bar',
+                data: { 
+                    labels: [], 
+                    datasets: [
+                        { label: 'Con FMI', data: [], backgroundColor: '#38bdf8' },
+                        { label: 'Sin FMI', data: [], backgroundColor: '#ef4444' },
+                        { label: 'Derivadas FMI', data: [], backgroundColor: '#c084fc' }
+                    ] 
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const ctxPrediosDona = document.getElementById('chartPrediosDona').getContext('2d');
+            chartPrediosDona = new Chart(ctxPrediosDona, {
+                type: 'doughnut',
+                data: { 
+                    labels: ['Predios Con FMI Directo', 'Derivadas FMI', 'Predios Sin FMI', 'Nuevos Ocupantes', 'Nuevos Poseedores'], 
+                    datasets: [{ 
+                        data: [0, 0, 0, 0, 0], 
+                        backgroundColor: ['#38bdf8', '#c084fc', '#ef4444', '#f59e0b', '#2dd4bf'],
+                        borderColor: '#131e3a',
+                        borderWidth: 2,
+                        cutout: '60%'
+                    }] 
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const ctxJuridicoBarra = document.getElementById('chartJuridicoBarra').getContext('2d');
+            chartJuridicoBarra = new Chart(ctxJuridicoBarra, {
+                type: 'bar',
+                data: { labels: [], datasets: [
+                    { label: 'Área Con FMI (km²)', data: [], backgroundColor: '#4ade80' },
+                    { label: 'Área Sin FMI (km²)', data: [], backgroundColor: '#f59e0b' }
+                ]},
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const ctxJuridicoDona = document.getElementById('chartJuridicoDona').getContext('2d');
+            chartJuridicoDona = new Chart(ctxJuridicoDona, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#38bdf8', '#4ade80', '#c084fc'], borderColor: '#131e3a', borderWidth: 3, cutout: '65%' }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function updateChartDona() {
+            if (!chartAreaDona) return;
+            chartAreaDona.data.labels = areaData.map(d => d.bloque);
+            chartAreaDona.data.datasets[0].data = areaData.map(d => parseFloat(String(d.area).replace(',', '.')) || 0);
+            chartAreaDona.update();
+        }
+
+        function updatePrediosCharts() {
+            if (chartPrediosBarra) {
+                chartPrediosBarra.data.labels = prediosData.map(d => d.bloque);
+                chartPrediosBarra.data.datasets[0].data = prediosData.map(d => parseFloat(d.con_fmi) || 0);
+                chartPrediosBarra.data.datasets[1].data = prediosData.map(d => parseFloat(d.sin_fmi) || 0);
+                chartPrediosBarra.data.datasets[2].data = prediosData.map(d => parseFloat(d.derivadas_fmi) || 0);
+                chartPrediosBarra.update();
+            }
+
+            if (chartPrediosDona) {
+                let sumConFmi = 0, sumSinFmi = 0, sumDerivadas = 0, sumOcupantes = 0, sumPoseedores = 0;
+                prediosData.forEach(row => {
+                    sumConFmi += parseFloat(row.con_fmi) || 0;
+                    sumSinFmi += parseFloat(row.sin_fmi) || 0;
+                    sumDerivadas += parseFloat(row.derivadas_fmi) || 0;
+                    sumOcupantes += parseFloat(row.nuevos_ocupantes) || 0;
+                    sumPoseedores += parseFloat(row.nuevos_poseedor) || 0;
+                });
+                chartPrediosDona.data.datasets[0].data = [sumConFmi, sumDerivadas, sumSinFmi, sumOcupantes, sumPoseedores];
+                chartPrediosDona.update();
+            }
+        }
+
+        function updateJuridicoCharts() {
+            if (chartJuridicoBarra) {
+                chartJuridicoBarra.data.labels = juridicoData.map(d => d.bloque);
+                chartJuridicoBarra.data.datasets[0].data = juridicoData.map(d => parseFloat(d.area_fmi) || 0);
+                chartJuridicoBarra.data.datasets[1].data = juridicoData.map(d => Math.max(0, (parseFloat(d.area_bloque) || 0) - (parseFloat(d.area_fmi) || 0)));
+                chartJuridicoBarra.update();
+            }
+
+            if (chartJuridicoDona) {
+                chartJuridicoDona.data.labels = juridicoData.map(d => d.bloque);
+                chartJuridicoDona.data.datasets[0].data = juridicoData.map(d => {
+                    const bloque = parseFloat(d.area_bloque) || 0;
+                    const fmi = parseFloat(d.area_fmi) || 0;
+                    return bloque > 0 ? parseFloat(((fmi / bloque) * 100).toFixed(1)) : 0;
+                });
+                chartJuridicoDona.update();
+            }
+        }
+
+        function updateAllCharts() {
+            updateChartDona();
+            updatePrediosCharts();
+            updateJuridicoCharts();
+
+            if (chartIntervencionBarra) {
+                chartIntervencionBarra.data.labels = intervencionData.map(d => d.bloque);
+                chartIntervencionBarra.data.datasets[0].data = intervencionData.map(d => parseFloat(d.total_predios) || 0);
+                chartIntervencionBarra.data.datasets[1].data = intervencionData.map(d => parseFloat(d.delimitado) || 0);
+                chartIntervencionBarra.data.datasets[2].data = intervencionData.map(d => (parseFloat(d.total_predios) || 0) - (parseFloat(d.delimitado) || 0));
+                chartIntervencionBarra.data.datasets[3].data = intervencionData.map(d => parseFloat(d.permisado) || 0);
+                chartIntervencionBarra.data.datasets[4].data = intervencionData.map(d => parseFloat(d.sin_intervencion) || 0);
+                chartIntervencionBarra.data.datasets[5].data = intervencionData.map(d => (parseFloat(d.total_predios) || 0) - ((parseFloat(d.permisado) || 0) + (parseFloat(d.sin_intervencion) || 0)));
+                chartIntervencionBarra.update();
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            initCharts();
+            renderAllTables();
+
+            if (window.supabase) {
+                dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                await cargarDatosNube();
+            }
+        });
+    </script>
+</body>
+</html>
