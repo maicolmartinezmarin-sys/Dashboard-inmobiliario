@@ -3,7 +3,7 @@ import os
 
 # Configuración de la página en modo ancho para que aproveche todo el diseño del HTML
 st.set_page_config(
-    page_title="Gstión Inmobiliaria",
+    page_title="Gestión Inmobiliaria",
     page_icon="📊",
     layout="wide"
 )
