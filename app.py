@@ -7,59 +7,43 @@ st.set_page_config(
 )
 
 # ==========================================
-# ESTILOS CSS PERSONALIZADOS (Contenedor con scroll)
+# ESTILOS CSS GENERALES DE LA APP (Opcional)
 # ==========================================
 st.markdown(
     """
     <style>
-    /* Contenedor flexible que se adapta al 100% del ancho del contenedor padre */
-    .custom-scroll-container {
-        width: 100%;
-        max-height: 500px; /* Ajusta la altura máxima según lo necesites */
-        overflow-y: auto;
-        overflow-x: hidden; /* Evita scroll horizontal no deseado */
-        padding-right: 8px;
-        box-sizing: border-box; /* Asegura que el padding no rompa el ancho */
-    }
-
-    /* Estilización moderna de la barra de desplazamiento */
-    .custom-scroll-container::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    .custom-scroll-container::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    .custom-scroll-container::-webkit-scrollbar-thumb {
-        background: #888;
-        border-radius: 4px;
-    }
-
-    .custom-scroll-container::-webkit-scrollbar-thumb:hover {
-        background: #555;
+    /* Ocultar elementos predeterminados de Streamlit si quieres vista 100% limpia tipo app web */
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-
-# Función para cargar y mostrar el archivo HTML
+# ==========================================
+# FUNCIÓN PARA CARGAR EL DASHBOARD HTML
+# ==========================================
 def load_html():
-  # Busca el archivo dashboard.html en la misma carpeta
-  html_file = "dashboard.html"
-  if os.path.exists(html_file):
-    with open(html_file, "r", encoding="utf-8") as f:
-      html_content = f.read()
-    # Renderiza el HTML y CSS original dentro de Streamlit
-    st.components.v1.html(html_content, height=900, scrolling=True)
-  else:
-    st.error(
-        "No se encontró el archivo 'dashboard.html' en el repositorio. Por"
-        " favor, asegúrate de subirlo."
-    )
-
+    # Busca el archivo dashboard.html en la misma carpeta
+    html_file = "dashboard.html"
+    if os.path.exists(html_file):
+        with open(html_file, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        
+        # Renderiza el HTML permitiendo el scroll nativo dentro del componente
+        st.components.v1.html(
+            html_content, 
+            height=850,       # Altura visible del visor en píxeles (ajústala si es necesario)
+            scrolling=True    # Habilita la barra de desplazamiento interna del iframe
+        )
+    else:
+        st.error(
+            "No se encontró el archivo 'dashboard.html' en el repositorio. Por favor, asegúrate de subirlo."
+        )
 
 # Ejecutar la vista de HTML
 load_html()
