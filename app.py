@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 from st_supabase_connection import SupabaseConnection
@@ -11,8 +12,11 @@ supabase_conn = st.connection("supabase", type=SupabaseConnection)
 
 # 1. Función para obtener la tarifa guardada en Supabase
 def cargar_tarifa():
-    res = supabase_conn.table("configuracion").select("tarifa_m2").eq("id", 1).execute()
-    return float(res.data[0]["tarifa_m2"]) if res.data else 900.0
+    try:
+        res = supabase_conn.table("configuracion").select("tarifa_m2").eq("id", 1).execute()
+        return float(res.data[0]["tarifa_m2"]) if res.data else 900.0
+    except Exception:
+        return 900.0  # Valor por defecto en caso de falla de conexión
 
 # 2. Función para actualizar la tarifa en Supabase
 def actualizar_tarifa(nueva_tarifa):
@@ -54,7 +58,7 @@ df["Valor_Salvos"] = df["Salvos_m2"] * tarifa_actual
 df["Valor_Receptoras"] = df["Receptoras_m2"] * tarifa_actual
 df["Total_Intervencion"] = df["Valor_Salvos"] + df["Valor_Receptoras"]
 
-# Tarjetas KPI
+# Tarjetas KPI Native Streamlit
 k1, k2, k3 = st.columns(3)
 k1.metric("Área Salvos Total", f"{(df['Salvos_m2'].sum() / 1e6):,.2f} km²")
 k2.metric("Área Receptoras Total", f"{(df['Receptoras_m2'].sum() / 1e6):,.2f} km²")
@@ -82,3 +86,22 @@ st.dataframe(df.style.format({
     "Valor_Receptoras": "$ {:,.2f}",
     "Total_Intervencion": "$ {:,.2f}"
 }), use_container_width=True)
+
+st.divider()
+
+# ==============================================================================
+# INTEGRACIÓN DEL COMPONENTE HTML DENTRO DE STREAMLIT
+# ==============================================================================
+st.subheader("🖥️ Vista Interactiva del Dashboard HTML")
+
+# Opción A: Cargar directamente desde tu archivo .html guardado en el mismo directorio
+try:
+    with open("dashboard.html", "r", encoding="utf-8") as f:
+        html_code = f.read()
+    
+    # Se establece una altura (height) amplia de 1800px para evitar cortes
+    # y scrolling=True para permitir desplazamiento suave si la ventana es más pequeña.
+    components.html(html_code, height=1800, scrolling=True)
+
+except FileNotFoundError:
+    st.warning("⚠️ No se encontró el archivo `dashboard.html`. Asegúrate de guardarlo en la misma carpeta raíz del archivo Python de tu aplicación Streamlit.")
