@@ -1,44 +1,56 @@
 import os
 import streamlit as st
 
-# Configuración de la página en modo ancho para que aproveche todo el diseño
+# Configuración de la página en modo ancho
 st.set_page_config(
     page_title="Gestión Inmobiliaria", page_icon="📊", layout="wide"
 )
 
 # ==========================================
-# ESTILOS CSS GENERALES DE LA APP (Opcional)
+# ESTILOS CSS PARA BLOQUEAR EL SCROLL DE STREAMLIT
 # ==========================================
 st.markdown(
     """
     <style>
-    /* Ocultar elementos predeterminados de Streamlit si quieres vista 100% limpia tipo app web */
+    /* Ocultar el scroll y ajustar márgenes de la página principal de Streamlit */
+    .stApp {
+        overflow: hidden !important;
+    }
+    
+    /* Eliminar padding excesivo del contenedor principal para que el dashboard ocupe toda la vista */
     .block-container {
         padding-top: 1rem;
-        padding-bottom: 1rem;
+        padding-bottom: 0rem;
         padding-left: 1rem;
         padding-right: 1rem;
+        max-width: 100% !important;
+    }
+    
+    /* Asegurar que el iframe o componente HTML maneje su propio espacio */
+    iframe {
+        display: block;
+        width: 100% !important;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+
 # ==========================================
 # FUNCIÓN PARA CARGAR EL DASHBOARD HTML
 # ==========================================
 def load_html():
-    # Busca el archivo dashboard.html en la misma carpeta
     html_file = "dashboard.html"
     if os.path.exists(html_file):
         with open(html_file, "r", encoding="utf-8") as f:
             html_content = f.read()
         
-        # Renderiza el HTML permitiendo el scroll nativo dentro del componente
+        # Renderiza el HTML con scrolling=True para que el scroll viva 100% dentro del iframe
         st.components.v1.html(
             html_content, 
-            height=850,       # Altura visible del visor en píxeles (ajústala si es necesario)
-            scrolling=True    # Habilita la barra de desplazamiento interna del iframe
+            height=850,       # Altura fija o ajustada al alto de tu pantalla en modo wide
+            scrolling=True    # Activa la barra de desplazamiento únicamente en tu dashboard
         )
     else:
         st.error(
